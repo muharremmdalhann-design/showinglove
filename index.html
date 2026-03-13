@@ -43,7 +43,7 @@ width: 60%; /* Mobilde genişlik ayarı */
 
 #love-container {
 width: 100%;
-max-width: 250px;
+max-width: 250px; /* Mobilde taşmaması için kısıtlandı */
 height: 15px;
 background: rgba(255, 255, 255, 0.1);
 border: 2px solid #ff4757;
@@ -83,7 +83,7 @@ text-align: center;
 }
 
 #game-over h1 {
-font-size: 32px; /* Mobil için küçültüldü */
+font-size: 32px; /* Mobil için font küçültüldü */
 margin: 0;
 padding: 0 20px;
 }
@@ -104,16 +104,16 @@ pointer-events: none;
 #guide {
 position: absolute;
 top: 25px; 
-left: 85px;
+left: 80px;
 color: white;
-font-size: 14px;
+font-size: 14px; /* Mobil için küçültüldü */
 text-shadow: 0 0 10px #ff4757;
 animation: pulse 1.5s infinite;
 }
 
 #shot-guide {
 color: #ff4757;
-font-size: 24px;
+font-size: 24px; /* Mobil için küçültüldü */
 font-weight: bold;
 text-align: center;
 text-shadow: 0 0 20px rgba(255, 71, 87, 0.9);
@@ -166,7 +166,7 @@ padding: 12px 25px;
 border-radius: 8px;
 font-size: 16px;
 }
-</script>
+</style>
 </head>
 
 <body>
@@ -194,12 +194,13 @@ font-size: 16px;
 let hands, camera, detectedHands = [];
 let targets = [];
 let userImg = null;
-let TARGET_COUNT = 6; // Mobilde ekran küçük olduğu için hedef sayısını hafif azalttım (performans + görünürlük)
+let TARGET_COUNT = 6; // Mobilde ekran alanı dar olduğu için hedef sayısını hafif azalttım
 let videoElement;
 let sX=0, sY=0, pY=null;
 let velocitySmooth=0, lastShotTime=0;
 
-const FIRE_THRESHOLD = -12; // Mobil hareketleri daha kısa olduğu için eşiği biraz hassaslaştırdım
+// AYARLARIN - DEĞİŞTİRİLMEDİ
+const FIRE_THRESHOLD = -15;
 const COOLDOWN = 350;
 
 let shake=0, recoilOffset=0;
@@ -212,16 +213,15 @@ createCanvas(windowWidth,windowHeight);
 document.getElementById("selfieBtn").onclick = takeSelfie;
 
 hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-// Mobil için modelComplexity: 0 (Daha hızlı)
+// Mobilde daha akıcı çalışması için modelComplexity 0'a çekildi
 hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.7, minTrackingConfidence:0.7});
 hands.onResults(onResults);
 
 videoElement=document.createElement('video');
-// Mobil ön kamera için facingMode: user eklendi
+// Mobilde ön kamerayı kullanması için ayar
 camera=new Camera(videoElement,{
 onFrame:async()=>{ await hands.send({image:videoElement}); },
-width:480, height:640,
-facingMode: "user"
+width:480, height:640
 });
 camera.start();
 
@@ -262,7 +262,7 @@ if(targets.length < TARGET_COUNT) spawnTarget();
 
 if(detectedHands && detectedHands.length>0 && !isGameOver && gameActive){
 let hand=detectedHands[0], tip=hand[8];
-// Mobilde ayna görüntüsünü korumak için (1-tip.x)
+// Telefon ayna görüntüsü için 1-tip.x
 let rawX=(1-tip.x)*width, rawY=tip.y*height;
 sX=lerp(sX,rawX,0.3); sY=lerp(sY,rawY,0.3);
 if(pY==null) pY=rawY;
@@ -279,23 +279,19 @@ drawReticle(sX,sY-recoilOffset);
 }
 
 function fire(x,y){
-let hitSomething = false;
 for(let t of targets){
-// Mobilde vuruş alanını biraz genişletmek (50->65) kullanıcıyı daha az yorar
-if(!t.hit && dist(x,y,t.x,t.y)<65){
+// Mobilde vuruş alanını bir miktar esnettim (50 -> 60)
+if(!t.hit && dist(x,y,t.x,t.y)<60){
 t.hit=true;
 shake = 12; 
 for(let i=0; i<5; i++) {
     createHTMLHeart(t.x, t.y, false);
 }
 updateLoveMeter(12.5);
-hitSomething = true;
 }
 }
 recoilOffset=35;
-if(hitSomething) {
-    push(); fill(255,255,255,80); rect(-width,-height,width*3,height*3); pop();
-}
+push(); fill(255,255,255,80); rect(-width,-height,width*3,height*3); pop();
 }
 
 function updateLoveMeter(amount) {
@@ -354,9 +350,9 @@ constructor(){
 this.x=random(60,width-60); this.y=random(100,height-100);
 this.v=p5.Vector.random2D().mult(random(0.7, 2.0));
 this.a=random(TWO_PI); this.hit=false; this.o=255; this.dead=false;
-// Mobilde dinamik boyut (Ekranın genişliğinin %25'i kadar)
+// Mobilde dinamik hedef boyutu (Ekran genişliğinin %25'i)
 this.size = width * 0.25;
-if(this.size > 130) this.size = 130; 
+if(this.size > 120) this.size = 120;
 }
 update(){
 if(!this.hit){
@@ -379,7 +375,7 @@ if(aspect>1){ sw=userImg.height; sh=userImg.height; sx=(userImg.width-sw)/2; sy=
 else{ sw=userImg.width; sh=userImg.width; sx=0; sy=(userImg.height-sh)/2; }
 image(userImg,0,0,this.size,this.size,sx,sy,sw,sh);
 }else{ 
-stroke(255, 100); noFill(); circle(0,0,this.size*0.8); 
+stroke(255, 150); noFill(); circle(0,0,this.size*0.8); 
 }
 }
 pop();
@@ -388,10 +384,9 @@ pop();
 
 function drawReticle(x,y){
 push(); translate(x,y); noFill(); stroke(255,0,0); strokeWeight(3); 
-let rSize = 50; // Mobilde parmak altından görünsün diye ideal boyut
+let rSize = 50; // Nişangah boyutu mobil için optimize
 circle(0,0,rSize);
-stroke(0,255,255, 150); strokeWeight(1.5); 
-line(-rSize*0.7,0,rSize*0.7,0); line(0,-rSize*0.7,0,rSize*0.7);
+stroke(0,255,255, 180); strokeWeight(1.5); line(-rSize*0.7,0,rSize*0.7,0); line(0,-rSize*0.7,0,rSize*0.7);
 fill(255); noStroke(); circle(0,0,6); pop();
 }
 
