@@ -2,7 +2,8 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Love Shooter - Mobile Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Love Shooter - Mobile</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -14,120 +15,230 @@ margin:0;
 overflow:hidden;
 background:#020205;
 font-family:'Courier New',Courier,monospace;
-touch-action: none;
+touch-action: none; /* Mobilde kaydırmayı engeller */
 }
 
 #ui{
 position:absolute;
-top:20px;
-left:20px;
-right:20px;
+top:15px;
+left:15px;
 z-index:100;
 display:flex;
-flex-direction:column;
-gap:15px;
+flex-direction:row;
+gap:10px;
 pointer-events:none;
 }
 
-.btn {
-background:#ff4757;
-color:white;
-padding:20px 24px;
-border-radius:8px;
-cursor:pointer;
-border:2px solid white;
-font-family:'Courier New',Courier,monospace;
+#meter-ui {
+position: absolute;
+top: 15px;
+right: 15px;
+z-index: 100;
+display: flex;
+flex-direction: column;
+align-items: flex-end;
+pointer-events: none;
+width: 60%; /* Mobilde genişlik ayarı */
+}
+
+#love-container {
+width: 100%;
+max-width: 250px;
+height: 15px;
+background: rgba(255, 255, 255, 0.1);
+border: 2px solid #ff4757;
+border-radius: 10px;
+overflow: hidden;
+}
+
+#love-bar {
+width: 0%;
+height: 100%;
+background: #ff4757; 
+transition: width 0.3s ease;
+}
+
+#love-text {
+color: white;
+font-size: 10px;
 font-weight: bold;
-font-size: 34px; 
-pointer-events:auto;
+margin-bottom: 3px;
+letter-spacing: 1px;
+}
+
+#game-over {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(0, 0, 0, 0.9);
+display: none;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+z-index: 2000;
+color: #ff4757;
 text-align: center;
 }
 
-input{
-display:none;
+#game-over h1 {
+font-size: 32px; /* Mobil için küçültüldü */
+margin: 0;
+padding: 0 20px;
 }
-</style>
+
+#instruction-overlay {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+display: flex;
+justify-content: center;
+align-items: center;
+z-index: 500;
+pointer-events: none;
+}
+
+#guide {
+position: absolute;
+top: 25px; 
+left: 85px;
+color: white;
+font-size: 14px;
+text-shadow: 0 0 10px #ff4757;
+animation: pulse 1.5s infinite;
+}
+
+#shot-guide {
+color: #ff4757;
+font-size: 24px;
+font-weight: bold;
+text-align: center;
+text-shadow: 0 0 20px rgba(255, 71, 87, 0.9);
+padding: 15px;
+background: rgba(0,0,0,0.6);
+border-radius: 15px;
+width: 80%;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.5; transform: scale(0.95); }
+}
+
+.heart-particle {
+position: absolute;
+pointer-events: none;
+font-size: 20px;
+z-index: 2500;
+animation: floatOut 1.5s ease-out forwards;
+}
+
+@keyframes floatOut {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--tr)); opacity: 0; }
+}
+
+button{
+background:rgba(255, 71, 87, 0.8);
+color:white;
+padding:10px;
+width: 60px;
+height: 60px;
+border-radius:50%;
+cursor:pointer;
+border:2px solid white;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 20px;
+pointer-events:auto;
+}
+
+#resetBtn {
+margin-top: 30px;
+width: auto;
+height: auto;
+padding: 12px 25px;
+border-radius: 8px;
+font-size: 16px;
+}
+</script>
 </head>
 
 <body>
 
 <div id="ui">
-<label class="btn">
-🎯 HEDEF GÖRSELİ YÜKLE
-<input type="file" id="imgInput" accept="image/*">
-</label>
+<button id="selfieBtn" title="Take Selfie">📸</button>
+</div>
+
+<div id="instruction-overlay">
+<div id="guide">⬅️ START WITH SELFIE</div>
+<div id="shot-guide" style="display:none;">HOLD HAND LIKE GUN AND SHOOT!</div>
+</div>
+
+<div id="meter-ui">
+<div id="love-text">LOVE METER</div>
+<div id="love-container"><div id="love-bar"></div></div>
+</div>
+
+<div id="game-over">
+<h1>YOU GIVE SO MUCH LOVE!</h1>
+<button id="resetBtn" onclick="resetGame()">PLAY AGAIN</button>
 </div>
 
 <script>
 let hands, camera, detectedHands = [];
 let targets = [];
 let userImg = null;
-
-let TARGET_COUNT = 8; 
-
+let TARGET_COUNT = 6; // Mobilde ekran küçük olduğu için hedef sayısını hafif azalttım (performans + görünürlük)
 let videoElement;
-let sX=0;
-let sY=0;
-let pY=null;
-let velocitySmooth=0;
-let lastShotTime=0;
+let sX=0, sY=0, pY=null;
+let velocitySmooth=0, lastShotTime=0;
 
-// DOKUNULMADI - SENİN AYARLARIN
-const FIRE_THRESHOLD = -15;
+const FIRE_THRESHOLD = -12; // Mobil hareketleri daha kısa olduğu için eşiği biraz hassaslaştırdım
 const COOLDOWN = 350;
 
-let shake=0;
-let recoilOffset=0;
+let shake=0, recoilOffset=0;
+let loveScore = 0, maxLove = 100;
+let isGameOver = false;
+let gameActive = false; 
 
 function setup(){
 createCanvas(windowWidth,windowHeight);
+document.getElementById("selfieBtn").onclick = takeSelfie;
 
-document.getElementById('imgInput').addEventListener('change',(e)=>{
-const file=e.target.files[0];
-if(file){
-const reader=new FileReader();
-reader.onload=(ev)=>{
-userImg=loadImage(ev.target.result);
-};
-reader.readAsDataURL(file);
-}
-});
-
-hands=new Hands({
-locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
-});
-
-hands.setOptions({
-maxNumHands:1,
-modelComplexity:1,
-minDetectionConfidence:0.9,
-minTrackingConfidence:0.9
-});
-
+hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+// Mobil için modelComplexity: 0 (Daha hızlı)
+hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.7, minTrackingConfidence:0.7});
 hands.onResults(onResults);
 
 videoElement=document.createElement('video');
-// TELEFON UYUMLULUĞU İÇİN EKLENDİ
-videoElement.setAttribute('playsinline', '');
-videoElement.setAttribute('muted', '');
-
+// Mobil ön kamera için facingMode: user eklendi
 camera=new Camera(videoElement,{
-onFrame:async()=>{
-await hands.send({image:videoElement});
-},
-// ÖN KAMERAYI ZORLA AÇAR
-facingMode: "user",
-width: 640,
-height: 480
+onFrame:async()=>{ await hands.send({image:videoElement}); },
+width:480, height:640,
+facingMode: "user"
 });
-
 camera.start();
 
 for(let i=0;i<TARGET_COUNT;i++) spawnTarget();
 }
 
-function onResults(results){
-detectedHands=results.multiHandLandmarks;
+function onPhotoReady() {
+    document.getElementById('guide').style.display = 'none';
+    document.getElementById('shot-guide').style.display = 'block';
+}
+
+function onResults(results){ 
+    detectedHands=results.multiHandLandmarks; 
+    if(detectedHands.length > 0 && userImg && !gameActive && !isGameOver) {
+        gameActive = true;
+        document.getElementById('shot-guide').style.display = 'none';
+    }
 }
 
 function draw(){
@@ -135,117 +246,140 @@ let shakeX=random(-shake,shake);
 let shakeY=random(-shake,shake);
 translate(shakeX,shakeY);
 shake*=0.9;
-
 background(5,5,12);
 
+if(!isGameOver){
 for(let i=targets.length-1;i>=0;i--){
 targets[i].update();
-targets[i].display();
+if(!targets[i].hit) targets[i].display(); 
+}
+for(let i=targets.length-1;i>=0;i--){
+if(targets[i].hit) targets[i].display(); 
 if(targets[i].dead) targets.splice(i,1);
 }
-
 if(targets.length < TARGET_COUNT) spawnTarget();
-
-if(detectedHands && detectedHands.length>0){
-let hand=detectedHands[0];
-let tip=hand[8];
-
-let rawX=(1-tip.x)*width;
-let rawY=tip.y*height;
-
-sX=lerp(sX,rawX,0.25);
-sY=lerp(sY,rawY,0.25);
-
-if(pY==null) pY=rawY;
-
-let velocity=rawY-pY;
-velocitySmooth=lerp(velocitySmooth,velocity,0.4);
-
-let now=millis();
-if(velocitySmooth < FIRE_THRESHOLD && now-lastShotTime>COOLDOWN){
-lastShotTime=now;
-fire(sX,sY);
 }
 
+if(detectedHands && detectedHands.length>0 && !isGameOver && gameActive){
+let hand=detectedHands[0], tip=hand[8];
+// Mobilde ayna görüntüsünü korumak için (1-tip.x)
+let rawX=(1-tip.x)*width, rawY=tip.y*height;
+sX=lerp(sX,rawX,0.3); sY=lerp(sY,rawY,0.3);
+if(pY==null) pY=rawY;
+let velocity=rawY-pY;
+velocitySmooth=lerp(velocitySmooth,velocity,0.4);
+let now=millis();
+if(velocitySmooth < FIRE_THRESHOLD && now-lastShotTime>COOLDOWN){
+lastShotTime=now; fire(sX,sY);
+}
 pY=rawY;
-recoilOffset=lerp(recoilOffset,0,0.18);
+recoilOffset=lerp(recoilOffset,0,0.2);
 drawReticle(sX,sY-recoilOffset);
 }
 }
 
 function fire(x,y){
+let hitSomething = false;
 for(let t of targets){
-if(!t.hit && dist(x,y,t.x,t.y)<110){ 
+// Mobilde vuruş alanını biraz genişletmek (50->65) kullanıcıyı daha az yorar
+if(!t.hit && dist(x,y,t.x,t.y)<65){
 t.hit=true;
+shake = 12; 
+for(let i=0; i<5; i++) {
+    createHTMLHeart(t.x, t.y, false);
+}
+updateLoveMeter(12.5);
+hitSomething = true;
+}
+}
+recoilOffset=35;
+if(hitSomething) {
+    push(); fill(255,255,255,80); rect(-width,-height,width*3,height*3); pop();
 }
 }
 
-shake=18;
-recoilOffset=45;
+function updateLoveMeter(amount) {
+if(isGameOver) return;
+loveScore += amount;
+if(loveScore >= maxLove) {
+loveScore = maxLove;
+endGame();
+}
+document.getElementById('love-bar').style.width = loveScore + '%';
+}
 
-push();
-fill(255,255,255,100);
-rect(-width,-height,width*3,height*3);
-pop();
+function endGame() {
+isGameOver = true;
+shake = 30; 
+document.getElementById('game-over').style.display = 'flex';
+for(let i=0; i<60; i++) {
+    setTimeout(() => createHTMLHeart(width/2, height/2, true), i * 20);
+}
+}
+
+function createHTMLHeart(startX, startY, isFinal) {
+    const heart = document.createElement('div');
+    heart.className = 'heart-particle';
+    heart.innerHTML = '❤️'; 
+    const range = isFinal ? 600 : 200;
+    const tx = (Math.random() - 0.5) * range;
+    const ty = (Math.random() - 0.5) * range;
+    const tr = (Math.random() - 0.5) * 360; 
+    heart.style.setProperty('--tx', `${tx}px`);
+    heart.style.setProperty('--ty', `${ty}px`);
+    heart.style.setProperty('--tr', `${tr}deg`);
+    heart.style.left = `${startX}px`;
+    heart.style.top = `${startY}px`;
+    const container = isFinal ? document.getElementById('game-over') : document.body;
+    container.appendChild(heart);
+    setTimeout(() => heart.remove(), 1500);
+}
+
+function resetGame() {
+loveScore = 0;
+shake = 0;
+isGameOver = false;
+gameActive = false;
+userImg = null;
+document.getElementById('love-bar').style.width = '0%';
+document.getElementById('game-over').style.display = 'none';
+document.getElementById('guide').style.display = 'block';
+document.getElementById('shot-guide').style.display = 'none';
+const hearts = document.querySelectorAll('.heart-particle');
+hearts.forEach(h => h.remove());
 }
 
 class Target{
 constructor(){
-this.x=random(60,width-60);
-this.y=random(100,height-100);
-this.v=p5.Vector.random2D().mult(random(0.7,2.0));
-this.a=random(TWO_PI);
-this.hit=false;
-this.o=255;
-this.dead=false;
+this.x=random(60,width-60); this.y=random(100,height-100);
+this.v=p5.Vector.random2D().mult(random(0.7, 2.0));
+this.a=random(TWO_PI); this.hit=false; this.o=255; this.dead=false;
+// Mobilde dinamik boyut (Ekranın genişliğinin %25'i kadar)
+this.size = width * 0.25;
+if(this.size > 130) this.size = 130; 
 }
-
 update(){
 if(!this.hit){
-this.x+=this.v.x;
-this.y+=this.v.y;
-this.a+=0.015;
-if(this.x<60 || this.x>width-60) this.v.x*=-1;
-if(this.y<100 || this.y>height-60) this.v.y*=-1;
-}else{
-this.o-=3;
-if(this.o<=0) this.dead=true;
+this.x+=this.v.x; this.y+=this.v.y; this.a+=0.015;
+if(this.x<40 || this.x>width-40) this.v.x*=-1;
+if(this.y<80 || this.y>height-80) this.v.y*=-1;
+}else{ this.o-=4; if(this.o<=0) this.dead=true; }
 }
-}
-
 display(){
-push();
-translate(this.x,this.y);
+push(); translate(this.x,this.y);
 if(this.hit){
-textAlign(CENTER);
-fill(255,50,100,this.o);
-textSize(width * 0.08);
-textStyle(BOLD);
-text("YOU SHOWED LOVE",0,0);
+textAlign(CENTER); fill(255,50,100,this.o); textSize(20); textStyle(BOLD); text("LOVE!",0,0);
 }else{
 rotate(this.a);
 if(userImg){
-imageMode(CENTER);
-let size=300; 
+imageMode(CENTER); 
 let aspect=userImg.width/userImg.height;
 let sx,sy,sw,sh;
-
-if(aspect>1){
-sw=userImg.height;
-sh=userImg.height;
-sx=(userImg.width-sw)/2;
-sy=0;
-}else{
-sw=userImg.width;
-sh=userImg.width;
-sx=0;
-sy=(userImg.height-sh)/2;
-}
-image(userImg,0,0,size,size,sx,sy,sw,sh);
-}else{
-stroke(255);
-noFill();
-circle(0,0,100); 
+if(aspect>1){ sw=userImg.height; sh=userImg.height; sx=(userImg.width-sw)/2; sy=0; }
+else{ sw=userImg.width; sh=userImg.width; sx=0; sy=(userImg.height-sh)/2; }
+image(userImg,0,0,this.size,this.size,sx,sy,sw,sh);
+}else{ 
+stroke(255, 100); noFill(); circle(0,0,this.size*0.8); 
 }
 }
 pop();
@@ -253,33 +387,26 @@ pop();
 }
 
 function drawReticle(x,y){
-push();
-translate(x,y);
-noFill();
-stroke(255,0,0);
-strokeWeight(3);
-circle(0,0,100);
-
-stroke(0,255,255);
-strokeWeight(2);
-line(-65,0,65,0);
-line(0,-65,0,65);
-
-fill(255);
-noStroke();
-circle(0,0,7);
-pop();
+push(); translate(x,y); noFill(); stroke(255,0,0); strokeWeight(3); 
+let rSize = 50; // Mobilde parmak altından görünsün diye ideal boyut
+circle(0,0,rSize);
+stroke(0,255,255, 150); strokeWeight(1.5); 
+line(-rSize*0.7,0,rSize*0.7,0); line(0,-rSize*0.7,0,rSize*0.7);
+fill(255); noStroke(); circle(0,0,6); pop();
 }
 
-function spawnTarget(){
-targets.push(new Target());
+function spawnTarget(){ targets.push(new Target()); }
+
+function takeSelfie(){
+let tempCanvas=document.createElement("canvas");
+tempCanvas.width=videoElement.videoWidth; tempCanvas.height=videoElement.videoHeight;
+let ctx=tempCanvas.getContext("2d"); ctx.drawImage(videoElement,0,0);
+userImg=loadImage(tempCanvas.toDataURL(), () => {
+    onPhotoReady();
+});
 }
 
-function windowResized(){
-resizeCanvas(windowWidth,windowHeight);
-}
+function windowResized(){ resizeCanvas(windowWidth,windowHeight); }
 </script>
 </body>
 </html>
-
-
