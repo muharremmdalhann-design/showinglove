@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Love Shooter - Mobile</title>
+<title>Love Shooter - Mobile Pro</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -14,7 +14,6 @@ margin:0;
 overflow:hidden;
 background:#020205;
 font-family:'Courier New',Courier,monospace;
-/* Mobil kaydırmayı engellemek için */
 touch-action: none;
 }
 
@@ -22,7 +21,7 @@ touch-action: none;
 position:absolute;
 top:20px;
 left:20px;
-right:20px; /* Sağa da yasladık ki butonlar yayılsın */
+right:20px;
 z-index:100;
 display:flex;
 flex-direction:column;
@@ -30,17 +29,16 @@ gap:15px;
 pointer-events:none;
 }
 
-/* Mobilde basımı kolaylaştırmak için butonlar büyütüldü */
-.btn, button {
+.btn {
 background:#ff4757;
 color:white;
-padding:18px 24px;
+padding:20px 24px;
 border-radius:8px;
 cursor:pointer;
 border:2px solid white;
 font-family:'Courier New',Courier,monospace;
 font-weight: bold;
-font-size: 16px; 
+font-size: 18px; 
 pointer-events:auto;
 text-align: center;
 }
@@ -55,10 +53,9 @@ display:none;
 
 <div id="ui">
 <label class="btn">
-🎯 HEDEF YÜKLE
+🎯 HEDEF GÖRSELİ YÜKLE
 <input type="file" id="imgInput" accept="image/*">
 </label>
-<button id="selfieBtn">📸 SELFIE HEDEF</button>
 </div>
 
 <script>
@@ -66,7 +63,6 @@ let hands, camera, detectedHands = [];
 let targets = [];
 let userImg = null;
 
-// Mobilde daha akıcı olması için hedef sayısı biraz optimize edilebilir
 let TARGET_COUNT = 8; 
 
 let videoElement;
@@ -76,6 +72,7 @@ let pY=null;
 let velocitySmooth=0;
 let lastShotTime=0;
 
+// DOKUNULMADI - SENİN AYARLARIN
 const FIRE_THRESHOLD = -15;
 const COOLDOWN = 350;
 
@@ -96,8 +93,6 @@ reader.readAsDataURL(file);
 }
 });
 
-document.getElementById("selfieBtn").onclick = takeSelfie;
-
 hands=new Hands({
 locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
 });
@@ -112,13 +107,18 @@ minTrackingConfidence:0.9
 hands.onResults(onResults);
 
 videoElement=document.createElement('video');
+// TELEFON UYUMLULUĞU İÇİN EKLENDİ
+videoElement.setAttribute('playsinline', '');
+videoElement.setAttribute('muted', '');
 
 camera=new Camera(videoElement,{
 onFrame:async()=>{
 await hands.send({image:videoElement});
 },
-width:640,
-height:480
+// ÖN KAMERAYI ZORLA AÇAR
+facingMode: "user",
+width: 640,
+height: 480
 });
 
 camera.start();
@@ -175,7 +175,7 @@ drawReticle(sX,sY-recoilOffset);
 
 function fire(x,y){
 for(let t of targets){
-if(!t.hit && dist(x,y,t.x,t.y)<40){ // Vuruş yarıçapı mobilde biraz küçüldü
+if(!t.hit && dist(x,y,t.x,t.y)<60){ 
 t.hit=true;
 }
 }
@@ -191,9 +191,9 @@ pop();
 
 class Target{
 constructor(){
-this.x=random(50,width-50);
+this.x=random(60,width-60);
 this.y=random(100,height-100);
-this.v=p5.Vector.random2D().mult(random(0.7,2.0)); // Mobilde hız biraz daha dengeli
+this.v=p5.Vector.random2D().mult(random(0.7,2.0));
 this.a=random(TWO_PI);
 this.hit=false;
 this.o=255;
@@ -205,8 +205,8 @@ if(!this.hit){
 this.x+=this.v.x;
 this.y+=this.v.y;
 this.a+=0.015;
-if(this.x<40 || this.x>width-40) this.v.x*=-1;
-if(this.y<80 || this.y>height-40) this.v.y*=-1;
+if(this.x<60 || this.x>width-60) this.v.x*=-1;
+if(this.y<100 || this.y>height-60) this.v.y*=-1;
 }else{
 this.o-=3;
 if(this.o<=0) this.dead=true;
@@ -219,14 +219,14 @@ translate(this.x,this.y);
 if(this.hit){
 textAlign(CENTER);
 fill(255,50,100,this.o);
-textSize(width * 0.07); // Mobilde yazı boyutu ekrana oranlandı
+textSize(width * 0.08);
 textStyle(BOLD);
 text("YOU SHOWED LOVE",0,0);
 }else{
 rotate(this.a);
 if(userImg){
 imageMode(CENTER);
-let size=80; // HEDEFLERİN BOYU MOBİL İÇİN DÜZENLENDİ
+let size=120; 
 let aspect=userImg.width/userImg.height;
 let sx,sy,sw,sh;
 
@@ -245,7 +245,7 @@ image(userImg,0,0,size,size,sx,sy,sw,sh);
 }else{
 stroke(255);
 noFill();
-circle(0,0,70); // Placeholder halkası biraz küçüldü
+circle(0,0,100); 
 }
 }
 pop();
@@ -258,30 +258,21 @@ translate(x,y);
 noFill();
 stroke(255,0,0);
 strokeWeight(3);
-circle(0,0,45); // NİŞANGAH BOYU AYARLANDI
+circle(0,0,55);
 
 stroke(0,255,255);
 strokeWeight(2);
-line(-30,0,30,0);
-line(0,-30,0,30);
+line(-35,0,35,0);
+line(0,-35,0,35);
 
 fill(255);
 noStroke();
-circle(0,0,6);
+circle(0,0,7);
 pop();
 }
 
 function spawnTarget(){
 targets.push(new Target());
-}
-
-function takeSelfie(){
-let tempCanvas=document.createElement("canvas");
-tempCanvas.width=videoElement.videoWidth;
-tempCanvas.height=videoElement.videoHeight;
-let ctx=tempCanvas.getContext("2d");
-ctx.drawImage(videoElement,0,0);
-userImg=loadImage(tempCanvas.toDataURL());
 }
 
 function windowResized(){
