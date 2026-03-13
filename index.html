@@ -175,7 +175,7 @@ drawReticle(sX,sY-recoilOffset);
 
 function fire(x,y){
 for(let t of targets){
-if(!t.hit && dist(x,y,t.x,t.y)<60){ 
+if(!t.hit && dist(x,y,t.x,t.y)<110){ 
 t.hit=true;
 }
 }
@@ -258,7 +258,7 @@ translate(x,y);
 noFill();
 stroke(255,0,0);
 strokeWeight(3);
-circle(0,0,80);
+circle(0,0,100);
 
 stroke(0,255,255);
 strokeWeight(2);
@@ -281,4 +281,5 @@ resizeCanvas(windowWidth,windowHeight);
 </script>
 </body>
 </html>
+
 
