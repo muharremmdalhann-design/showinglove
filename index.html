@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Love Shooter - Mobile</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+
+<style>
+body{
+margin:0;
+overflow:hidden;
+background:#020205;
+font-family:'Courier New',Courier,monospace;
+/* Mobil kaydırmayı engellemek için */
+touch-action: none;
+}
+
+#ui{
+position:absolute;
+top:20px;
+left:20px;
+right:20px; /* Sağa da yasladık ki butonlar yayılsın */
+z-index:100;
+display:flex;
+flex-direction:column;
+gap:15px;
+pointer-events:none;
+}
+
+/* Mobilde basımı kolaylaştırmak için butonlar büyütüldü */
+.btn, button {
+background:#ff4757;
+color:white;
+padding:18px 24px;
+border-radius:8px;
+cursor:pointer;
+border:2px solid white;
+font-family:'Courier New',Courier,monospace;
+font-weight: bold;
+font-size: 16px; 
+pointer-events:auto;
+text-align: center;
+}
+
+input{
+display:none;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+<label class="btn">
+🎯 HEDEF YÜKLE
+<input type="file" id="imgInput" accept="image/*">
+</label>
+<button id="selfieBtn">📸 SELFIE HEDEF</button>
+</div>
+
+<script>
+let hands, camera, detectedHands = [];
+let targets = [];
+let userImg = null;
+
+// Mobilde daha akıcı olması için hedef sayısı biraz optimize edilebilir
+let TARGET_COUNT = 8; 
+
+let videoElement;
+let sX=0;
+let sY=0;
+let pY=null;
+let velocitySmooth=0;
+let lastShotTime=0;
+
+const FIRE_THRESHOLD = -15;
+const COOLDOWN = 350;
+
+let shake=0;
+let recoilOffset=0;
+
+function setup(){
+createCanvas(windowWidth,windowHeight);
+
+document.getElementById('imgInput').addEventListener('change',(e)=>{
+const file=e.target.files[0];
+if(file){
+const reader=new FileReader();
+reader.onload=(ev)=>{
+userImg=loadImage(ev.target.result);
+};
+reader.readAsDataURL(file);
+}
+});
+
+document.getElementById("selfieBtn").onclick = takeSelfie;
+
+hands=new Hands({
+locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+});
+
+hands.setOptions({
+maxNumHands:1,
+modelComplexity:1,
+minDetectionConfidence:0.9,
+minTrackingConfidence:0.9
+});
+
+hands.onResults(onResults);
+
+videoElement=document.createElement('video');
+
+camera=new Camera(videoElement,{
+onFrame:async()=>{
+await hands.send({image:videoElement});
+},
+width:640,
+height:480
+});
+
+camera.start();
+
+for(let i=0;i<TARGET_COUNT;i++) spawnTarget();
+}
+
+function onResults(results){
+detectedHands=results.multiHandLandmarks;
+}
+
+function draw(){
+let shakeX=random(-shake,shake);
+let shakeY=random(-shake,shake);
+translate(shakeX,shakeY);
+shake*=0.9;
+
+background(5,5,12);
+
+for(let i=targets.length-1;i>=0;i--){
+targets[i].update();
+targets[i].display();
+if(targets[i].dead) targets.splice(i,1);
+}
+
+if(targets.length < TARGET_COUNT) spawnTarget();
+
+if(detectedHands && detectedHands.length>0){
+let hand=detectedHands[0];
+let tip=hand[8];
+
+let rawX=(1-tip.x)*width;
+let rawY=tip.y*height;
+
+sX=lerp(sX,rawX,0.25);
+sY=lerp(sY,rawY,0.25);
+
+if(pY==null) pY=rawY;
+
+let velocity=rawY-pY;
+velocitySmooth=lerp(velocitySmooth,velocity,0.4);
+
+let now=millis();
+if(velocitySmooth < FIRE_THRESHOLD && now-lastShotTime>COOLDOWN){
+lastShotTime=now;
+fire(sX,sY);
+}
+
+pY=rawY;
+recoilOffset=lerp(recoilOffset,0,0.18);
+drawReticle(sX,sY-recoilOffset);
+}
+}
+
+function fire(x,y){
+for(let t of targets){
+if(!t.hit && dist(x,y,t.x,t.y)<40){ // Vuruş yarıçapı mobilde biraz küçüldü
+t.hit=true;
+}
+}
+
+shake=18;
+recoilOffset=45;
+
+push();
+fill(255,255,255,100);
+rect(-width,-height,width*3,height*3);
+pop();
+}
+
+class Target{
+constructor(){
+this.x=random(50,width-50);
+this.y=random(100,height-100);
+this.v=p5.Vector.random2D().mult(random(0.7,2.0)); // Mobilde hız biraz daha dengeli
+this.a=random(TWO_PI);
+this.hit=false;
+this.o=255;
+this.dead=false;
+}
+
+update(){
+if(!this.hit){
+this.x+=this.v.x;
+this.y+=this.v.y;
+this.a+=0.015;
+if(this.x<40 || this.x>width-40) this.v.x*=-1;
+if(this.y<80 || this.y>height-40) this.v.y*=-1;
+}else{
+this.o-=3;
+if(this.o<=0) this.dead=true;
+}
+}
+
+display(){
+push();
+translate(this.x,this.y);
+if(this.hit){
+textAlign(CENTER);
+fill(255,50,100,this.o);
+textSize(width * 0.07); // Mobilde yazı boyutu ekrana oranlandı
+textStyle(BOLD);
+text("YOU SHOWED LOVE",0,0);
+}else{
+rotate(this.a);
+if(userImg){
+imageMode(CENTER);
+let size=80; // HEDEFLERİN BOYU MOBİL İÇİN DÜZENLENDİ
+let aspect=userImg.width/userImg.height;
+let sx,sy,sw,sh;
+
+if(aspect>1){
+sw=userImg.height;
+sh=userImg.height;
+sx=(userImg.width-sw)/2;
+sy=0;
+}else{
+sw=userImg.width;
+sh=userImg.width;
+sx=0;
+sy=(userImg.height-sh)/2;
+}
+image(userImg,0,0,size,size,sx,sy,sw,sh);
+}else{
+stroke(255);
+noFill();
+circle(0,0,70); // Placeholder halkası biraz küçüldü
+}
+}
+pop();
+}
+}
+
+function drawReticle(x,y){
+push();
+translate(x,y);
+noFill();
+stroke(255,0,0);
+strokeWeight(3);
+circle(0,0,45); // NİŞANGAH BOYU AYARLANDI
+
+stroke(0,255,255);
+strokeWeight(2);
+line(-30,0,30,0);
+line(0,-30,0,30);
+
+fill(255);
+noStroke();
+circle(0,0,6);
+pop();
+}
+
+function spawnTarget(){
+targets.push(new Target());
+}
+
+function takeSelfie(){
+let tempCanvas=document.createElement("canvas");
+tempCanvas.width=videoElement.videoWidth;
+tempCanvas.height=videoElement.videoHeight;
+let ctx=tempCanvas.getContext("2d");
+ctx.drawImage(videoElement,0,0);
+userImg=loadImage(tempCanvas.toDataURL());
+}
+
+function windowResized(){
+resizeCanvas(windowWidth,windowHeight);
+}
+</script>
+</body>
+</html>
